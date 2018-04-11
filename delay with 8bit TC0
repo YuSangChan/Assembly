@@ -1,0 +1,44 @@
+; set the overflow handler for TC0 interrupt
+.org 0x0020
+rjmp overflow_handler
+
+;initialize TC0
+  ldi r16,0b00000101
+	out TCCR0B,r16 ;set cs00,cs01,cs02 to 101, set TCNT0 to FCPU/1024 mode
+	ldi r16,0b00000001
+	sts TIMSK0,r16 ;set  the timer overflow interrupt enable (TOIE0) bit
+	sei; enable global interrupts, equivalent to sbi SREG,I
+	clr r16
+	out TCNT0,r16 ;initialize timer/counter to 0
+  
+  
+;delay function & overflow_handler
+  delay4_0:
+	call delay2_0
+	call delay2_0
+	ret
+
+delay2_0:
+	call delay1_0
+	call delay1_0
+	ret
+
+delay1_0:
+	call delay0_5
+	call delay0_5
+	ret
+
+
+delay0_5:
+	clr r18 ;set overflows to 0
+	sec_count:	
+		cpi r18,30 ;compare overflow to 30	
+	brne sec_count ;branch back to sec_count if not equal
+	ret	;if 30 overflows have occured return to loop
+
+overflow_handler:
+	inc r18	;add 1 to the counter in the overflow interrput
+	cpi r18,61	;compare r18 with 61
+	brne PC+2 ;skip next line if not equal
+	clr r18	;if 61 overflows occured, reset the counter to zero
+	reti	;return from interrupt
