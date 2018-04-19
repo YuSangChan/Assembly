@@ -1,0 +1,267 @@
+.org 0x0000
+jmp reset
+
+LCD_init_String0:
+	.DB		0x0C,0x01		; turn on display, cursor and blink					+		clear display, return cursor to home position
+numbers:
+.db 0b00010100, 0b00100100, 0b00110100, 0b01000100 
+.db 0b01010100, 0b01100100
+
+reset:
+ldi r16,high(RAMEND) 
+out SPH,r16 ; Set Stack Pointer to top of RAM
+ldi r16,low(RAMEND)
+out SPL,r16
+cli ; No interrupts
+
+ldi r16,193
+sts TWBR,r16
+ldi r17,0x00
+sts TWSR,r16
+
+ldi r24,0x27
+call LCD_setup
+call LCD_Clear
+
+ldi		ZL,LOW(numbers*2)
+ldi		ZH,HIGH(numbers*2)
+ldi		r25,6
+call	LCD_Text
+
+rjmp mainloop
+
+mainLoop:
+	inc	r0
+	rjmp	mainLoop
+
+LCD_setup:
+	;send first start
+	call sendTWI_start
+	;send first assdress
+	mov r16,r24
+	add r16,r16
+	call sendTWI_SLA
+	;send first setup data
+	clr		r18
+	clr		r19
+	call	sendTWI_Nibble
+	;send first stop
+	call	sendTWI_Stop
+
+	;send second start
+	ldi		r18,LOW(5)
+	ldi		r19,HIGH(5)
+	call	sendTWI_Start
+	;send second address
+	mov		r16,r24
+	add		r16,r16
+	call	sendTWI_SLA
+	;send first 0x30
+	ldi		r18,0x30
+	clr		r19
+	call	sendTWI_Nibble
+	;send second stop
+	call	sendTWI_Stop
+
+	;send third start
+	ldi		r18,LOW(5)
+	ldi		r19,HIGH(5)
+	call	sendTWI_Start
+	;send third address
+	mov		r16,r24
+	add		r16,r16
+	call	sendTWI_SLA
+	;send second 0x30
+	ldi		r18,0x30
+	clr		r19
+	call	sendTWI_Nibble
+	;send third stop
+	call	sendTWI_Stop
+
+	;send fourth start
+	ldi		r18,LOW(5)
+	ldi		r19,HIGH(5)
+	call	sendTWI_Start
+	;send fourth address
+	mov		r16,r24
+	add		r16,r16
+	call	sendTWI_SLA
+	;send third 0x30
+	ldi		r18,0x30
+	clr		r19
+	call	sendTWI_Nibble
+	;send fourth stop
+	call	sendTWI_Stop
+
+	;send fifth start
+	call	sendTWI_Start
+	mov		r16,r24
+	add		r16,r16
+	;send fifth address
+	call	sendTWI_SLA
+
+	;send 0x28 reset
+	ldi		r18,0x28
+	clr		r19
+	call	sendTWI_Nibble
+	;send fifth stop
+	call	sendTWI_Stop
+
+	ldi		ZL,LOW(LCD_init_String0*2)
+	ldi		ZH,HIGH(LCD_init_String0*2)
+	ldi		r25,2								; all 2 bytes
+	ldi		r17,8								; lower 4 bits zero (Backlight on)
+	call	SendTWI_Data
+
+	call LCD_Position
+	ret
+
+LCD_Position:
+	call	sendTWI_Start
+	brne	LCD_serror
+
+	mov		r16,r24			; use this address
+	add		r16,r16			; and move over the r/w bit
+	call	sendTWI_SLA
+	brne	LCD_serror
+
+	mov		r16,r25
+	ori		r16,0x80		; set DDRAM address command
+	ldi		r17,8			; backlight
+	call	sendTWI_Byte
+	
+	rjmp	sendTWI_Stop
+
+LCD_Clear:
+	call	sendTWI_Start
+	mov		r16,r24			; use this address
+	add		r16,r16			; and move over the r/w bit
+	call	sendTWI_SLA
+
+	ldi		r16,0x01		; set DDRAM address command
+	ldi		r17,8			; backlight
+	call	sendTWI_Byte
+	rjmp	sendTWI_Stop
+
+LCD_Text:
+	call	sendTWI_Start
+	brne	LCD_serror
+
+	mov		r16,r24			; use this address
+	add		r16,r16			; and move over the r/w bit
+	call	sendTWI_SLA
+	brne	LCD_serror
+
+	cpi		r25,0x00		; any bytes left?
+	breq	LCD_Text_done	; if not all done
+	ldi		r17,9			; backlight + data byte
+LCD_Text_loop:
+	lpm		r16,Z+
+	call	sendTWI_Byte
+	brne	LCD_serror
+
+	dec		r25
+	brne	LCD_Text_loop
+
+LCD_Text_done:
+LCD_serror:
+	rjmp	sendTWI_Stop
+
+sendTWI_start:
+	ldi		r16,(1<<TWINT) | (1<<TWSTA) | (1<<TWEN)
+	sts		TWCR,r16
+
+	call	waitTWI
+
+	lds		r16,TWSR
+	andi	r16,0xf8		; mask out 
+	cpi		r16,0x08		; TWSR = START (0x08)
+	ret
+
+sendTWI_SLA:
+	sts		TWDR,r16
+	ldi		r16,(1<<TWINT) | (1<<TWEN)
+	sts		TWCR,r16
+
+	call	waitTWI
+	
+	lds		r16,TWSR
+	andi	r16,0xf8		; mask out 
+	cpi		r16,0x18		; TWSR = SLA+W sent, ACK received (0x18)
+	ret
+
+sendTWI_Nibble:
+	ori		r18,0x04
+	sts		TWDR,r18
+	ldi		r19,(1<<TWINT) | (1<<TWEN)
+	sts		TWCR,r19
+
+	call	waitTWI			; destroys r15
+	
+	lds		r19,TWSR
+	andi	r19,0xf8		; mask out 
+	cpi		r19,0x28		; TWSR = data sent, ACK received (0x28)
+	brne	sendTWI_Nibble_exit
+
+	andi	r18,0xFB		; set enable bit low
+	
+	sts		TWDR,r18
+	ldi		r19,(1<<TWINT) | (1<<TWEN)
+	sts		TWCR,r19
+
+	call	waitTWI
+	
+	lds		r19,TWSR
+	andi	r19,0xf8		; mask out 
+	cpi		r19,0x28		; TWSR = data sent, ACK received (0x28)
+sendTWI_Nibble_exit:
+	ret
+
+sendTWI_Byte:
+	mov		r18,r16
+	andi	r18,0xF0
+	or		r18,r17
+	call	sendTWI_Nibble
+	mov		r18,r16
+	swap	r18
+	andi	r18,0xF0
+	or		r18,r17
+	call	sendTWI_Nibble
+	ret
+
+SendTWI_Data:
+	call	sendTWI_Start
+	mov		r16,r24			; use this address
+	add		r16,r16			; and move over the r/w bit
+	call	sendTWI_SLA
+
+	cpi		r25,0x00		; any bytes left?
+	breq	sendTWI_done	; if not all done
+
+sendTWI_loop:
+	lpm		r16,Z+
+	call	sendTWI_Byte
+	brne	serror
+
+	dec		r25
+	brne	sendTWI_loop
+
+sendTWI_done:
+serror:
+;
+; send stop bit and we're done
+;
+sendTWI_Stop:
+	ldi		r16,(1<<TWINT) | (1<<TWEN) | (1<<TWSTO)		; and send stop
+	sts		TWCR,r16
+	ldi		r16,0
+sendTWI_Delay:
+	dec		r16
+	brne	sendTWI_Delay
+	ret
+
+waitTWI:
+	lds	r15,TWCR
+	sbrs	r15,TWINT		; wait until transmitted
+	rjmp	waitTWI
+	ret
