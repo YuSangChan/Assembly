@@ -1,0 +1,231 @@
+.org 0x0000
+jmp reset
+
+reset:
+ldi r16,high(RAMEND) 
+out SPH,r16 
+ldi r16,low(RAMEND)
+out SPL,r16
+cli 
+
+;setup TWI
+ldi r16,193
+sts		TWBR,r16
+ldi		r16,0x00
+sts		TWSR,r16
+
+ldi r24,0x27
+
+call sendStart
+breq PC+2
+jmp setupErr
+mov		r16,r24
+add		r16,r16
+call sendAddress
+breq PC+2
+jmp setupErr
+;send 0x00
+ldi r18,0x00
+call sendcmd
+call sendStop
+
+;send 0x30
+call sendStart
+breq PC+2
+jmp setupErr
+mov		r16,r24
+add		r16,r16
+call sendAddress
+breq PC+2
+jmp setupErr
+ldi r18,0x30
+call sendcmd
+call sendStop
+
+;send 0x30
+call sendStart
+breq PC+2
+jmp setupErr
+mov		r16,r24
+add		r16,r16
+call sendAddress
+breq PC+2
+jmp setupErr
+ldi r18,0x30
+call sendcmd
+call sendStop
+
+;send 0x30
+call sendStart
+breq PC+2
+jmp setupErr
+mov		r16,r24
+add		r16,r16
+call sendAddress
+breq PC+2
+jmp setupErr
+ldi r18,0x30
+call sendcmd
+call sendStop
+
+;send 0x20
+call sendStart
+breq PC+2
+jmp setupErr
+mov		r16,r24
+add		r16,r16
+call sendAddress
+breq PC+2
+jmp setupErr
+ldi r18,0x20
+call sendcmd
+call sendStop
+
+;send 0x28
+call sendStart
+breq PC+2
+jmp setupErr
+mov		r16,r24
+add		r16,r16
+call sendAddress
+breq PC+2
+jmp setupErr
+ldi r18,0x28
+call sendcmd
+call sendStop
+
+;send 0x0C
+call sendStart
+breq PC+2
+jmp setupErr
+mov		r16,r24
+add		r16,r16
+call sendAddress
+breq PC+2
+jmp setupErr
+ldi r18,0x0C
+call sendcmd
+call sendStop
+
+;send 0x01
+call sendStart
+breq PC+2
+jmp setupErr
+mov		r16,r24
+add		r16,r16
+call sendAddress
+breq PC+2
+jmp setupErr
+ldi r18,0x01
+call sendcmd
+call sendStop
+
+;send 0x06
+call sendStart
+breq PC+2
+jmp setupErr
+mov		r16,r24
+add		r16,r16
+call sendAddress
+breq PC+2
+jmp setupErr
+ldi r18,0x06
+call sendcmd
+call sendStop
+
+;send 0x02
+call sendStart
+breq PC+2
+jmp setupErr
+mov		r16,r24
+add		r16,r16
+call sendAddress
+breq PC+2
+jmp setupErr
+ldi r18,0x02
+call sendcmd
+call sendStop
+
+sendcmd:
+ldi 	r17,0x08
+mov		r18,r16
+andi	r18,0xF0
+or		r18,r17
+call	sendNibble
+mov		r18,r16
+swap	r18
+andi	r18,0xF0
+or		r18,r17
+call	sendNibble
+ret
+
+senddata:
+ldi 	r17,0x09
+mov		r18,r16
+andi	r18,0xF0
+or		r18,r17
+call	sendNibble
+mov		r18,r16
+swap	r18
+andi	r18,0xF0
+or		r18,r17
+call	sendNibble
+ret
+
+sendNibble:
+ori		r18,0x04
+sts		TWDR,r18
+ldi		r19,(1<<TWINT) | (1<<TWEN)
+sts		TWCR,r19
+call	waitTWI			; destroys r15	
+lds		r19,TWSR
+andi	r19,0xf8		; mask out 
+cpi		r19,0x28		; TWSR = data sent, ACK received (0x28)
+brne	sendTWI_Nibble_exit
+andi	r18,0xFB		; set enable bit low
+sts		TWDR,r18
+ldi		r19,(1<<TWINT) | (1<<TWEN)
+sts		TWCR,r19
+call	waitTWI
+lds		r19,TWSR
+andi	r19,0xf8		; mask out 
+cpi		r19,0x28		; TWSR = data sent, ACK received (0x28)
+sendTWI_Nibble_exit:
+ret
+
+
+sendStart:
+ldi r16,(1<<TWINT) | (1<<TWSTA) | (1<<TWEN)
+sts		TWCR,r16
+call waitTWI
+lds		r16,TWSR
+andi	r16,0xf8		
+cpi		r16,0x08		
+ret
+
+sendAddress:
+sts		TWDR,r16
+ldi		r16,(1<<TWINT) | (1<<TWEN)
+sts		TWCR,r16
+call	waitTWI
+lds		r16,TWSR
+andi	r16,0xf8		
+cpi		r16,0x18		
+
+sendStop:
+	ldi		r16,(1<<TWINT) | (1<<TWEN) | (1<<TWSTO)
+	sts		TWCR,r16
+	ldi		r16,0
+sendDelay:
+	dec		r16
+	brne	sendDelay
+	ret
+
+
+waitTWI:
+lds	r15,TWCR
+sbrs	r15,TWINT		
+rjmp	waitTWI
+ret
+
+setupErr:
