@@ -1,0 +1,358 @@
+	
+	
+	
+	
+	Wire.begin();
+		rxBufferIndex = 0;
+		sts	0x01BA, r1
+		rxBufferLength = 0;
+		sts	0x01B9, r1
+		txBufferIndex = 0;
+		sts	0x01B8, r1
+		txBufferLength = 0;
+		sts	0x01B7, r1
+		twi_init();
+			  // initialize state
+			  twi_state = TWI_READY;
+			  sts	0x01B6, r1
+			  twi_sendStop = true;		// default value
+			  ldi	r24, 0x01
+			  sts	0x01B5, r24
+			  twi_inRepStart = false;
+			  sts	0x01B4, r1
+			  
+			  
+			  // activate internal pullups for twi.
+			  digitalWrite(SDA, 1);
+			  ldi	r24, 0x12
+			  call	0x104
+			  digitalWrite(SCL, 1);
+			  ldi	r24, 0x13
+			  call	0x104
+			  
+			  // initialize twi prescaler and bit rate
+			  cbi(TWSR, TWPS0);
+			  lds	r24, 0x00B9
+			  andi	r24, 0xFE ; 254
+			  sts	0x00B9, r24
+			  cbi(TWSR, TWPS1);
+			  lds	r24, 0x00B9
+			  andi	r24, 0xFD	; 253
+			  sts	0x00B9, r24
+			  TWBR = ((F_CPU / TWI_FREQ) - 16) / 2;
+			  ldi	r24, 0x48	; 72
+			  sts	0x00B8, r24
+			  
+			  /* twi bit rate formula from atmega128 manual pg 204
+			  SCL Frequency = CPU Clock Frequency / (16 + (2 * TWBR))
+			  note: TWBR should be 10 or higher for master mode
+			  It is 72 for a 16mhz Wiring board with 100kHz TWI */
+
+			  // enable twi module, acks, and twi interrupt
+			  TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA);
+			  ldi	r24, 0x45	; 69
+			  sts	0x00BC, r24
+	_displayfunction = LCD_4BITMODE | LCD_1LINE | LCD_5x8DOTS;
+	sts	0x01CC, r1
+	begin(_cols, _rows); 
+	lds	r24, 0x01D1	
+		if (lines > 1) {
+		cpi	r24, 0x02	; 2
+		brcs	.+6      	; 0x97a
+		_displayfunction |= LCD_2LINE;
+		ldi	r25, 0x08	; 8
+		sts	0x01CC, r25
+		}
+		_numlines = lines;
+97a:	80 93 cf 01 	sts	0x01CF, r24	; 0x8001cf <lcd+0x8>
+		
+		// SEE PAGE 45/46 FOR INITIALIZATION SPECIFICATION!
+		// according to datasheet, we need at least 40ms after power rises above 2.7V
+		// before sending commands. Arduino can turn on way befer 4.5V so we'll wait 50
+		delay(50); 
+ 97e:	62 e3       	ldi	r22, 0x32	; 50
+ 980:	70 e0       	ldi	r23, 0x00	; 0
+ 982:	80 e0       	ldi	r24, 0x00	; 0
+ 984:	90 e0       	ldi	r25, 0x00	; 0
+ 986:	0e 94 18 01 	call	0x230	; 0x230 <delay>
+	  
+		// Now we pull both RS and R/W low to begin commands
+		expanderWrite(_backlightval);	// reset expanderand turn backlight off (Bit 8 =1)
+		lds	r22, 0x01D2
+		ldi	r24, 0xC7	; 199
+		ldi	r25, 0x01	; 1
+		call	0x412
+		push	r28
+		movw	r30, r24
+		ldd	r28, Z+4	; 0x04
+			Wire.beginTransmission(_Addr);
+				// indicate that we are transmitting
+			    transmitting = 1;
+				ldi	r18, 0x01	; 1
+				sts	0x0189, r18
+			    // set address of targeted slave
+			    txAddress = address;
+				sts	0x01AA, r28
+			    // reset tx buffer iterator vars
+			    txBufferIndex = 0;
+				sts	0x01B8, r1
+			    txBufferLength = 0;
+				sts	0x01B7, r1
+			printIIC((int)(_data) | _backlightval);
+			ldd	r24, Z+11	; 0x0b
+			or	r22, r24
+			ldi	r24, 0xBB	; 187
+			ldi	r25, 0x01	; 1
+			call	0x3b4
+			size_t TwoWire::write(uint8_t data)
+			{
+ 3b4:	cf 93       	push	r28
+ 3b6:	df 93       	push	r29
+ 3b8:	1f 92       	push	r1
+ 3ba:	cd b7       	in	r28, 0x3d	; 61
+ 3bc:	de b7       	in	r29, 0x3e	; 62
+ 3be:	69 83       	std	Y+1, r22	; 0x01
+   if(transmitting){
+ 3c0:	20 91 89 01 	lds	r18, 0x0189	; 0x800189 <_ZN7TwoWire12transmittingE>
+ 3c4:	22 23       	and	r18, r18
+ 3c6:	d1 f0       	breq	.+52     	; 0x3fc <_ZN7TwoWire5writeEh+0x48>
+  // in master transmitter mode
+    // don't bother if buffer is full
+    if(txBufferLength >= BUFFER_LENGTH){
+ 3c8:	20 91 b7 01 	lds	r18, 0x01B7	; 0x8001b7 <_ZN7TwoWire14txBufferLengthE>
+ 3cc:	20 32       	cpi	r18, 0x20	; 32
+ 3ce:	40 f0       	brcs	.+16     	; 0x3e0 <_ZN7TwoWire5writeEh+0x2c>
+  private:
+    int write_error;
+    size_t printNumber(unsigned long, uint8_t);
+    size_t printFloat(double, uint8_t);
+  protected:
+    void setWriteError(int err = 1) { write_error = err; }
+ 3d0:	21 e0       	ldi	r18, 0x01	; 1
+ 3d2:	30 e0       	ldi	r19, 0x00	; 0
+ 3d4:	fc 01       	movw	r30, r24
+ 3d6:	33 83       	std	Z+3, r19	; 0x03
+ 3d8:	22 83       	std	Z+2, r18	; 0x02
+      setWriteError();
+      return 0;
+ 3da:	80 e0       	ldi	r24, 0x00	; 0
+ 3dc:	90 e0       	ldi	r25, 0x00	; 0
+ 3de:	15 c0       	rjmp	.+42     	; 0x40a <__LOCK_REGION_LENGTH__+0xa>
+    }
+    // put byte in tx buffer
+    txBuffer[txBufferIndex] = data;
+ 3e0:	80 91 b8 01 	lds	r24, 0x01B8	; 0x8001b8 <_ZN7TwoWire13txBufferIndexE>
+ 3e4:	e8 2f       	mov	r30, r24
+ 3e6:	f0 e0       	ldi	r31, 0x00	; 0
+ 3e8:	e6 57       	subi	r30, 0x76	; 118
+ 3ea:	fe 4f       	sbci	r31, 0xFE	; 254
+ 3ec:	99 81       	ldd	r25, Y+1	; 0x01
+ 3ee:	90 83       	st	Z, r25
+    ++txBufferIndex;
+ 3f0:	8f 5f       	subi	r24, 0xFF	; 255
+ 3f2:	80 93 b8 01 	sts	0x01B8, r24	; 0x8001b8 <_ZN7TwoWire13txBufferIndexE>
+    // update amount in buffer   
+    txBufferLength = txBufferIndex;
+ 3f6:	80 93 b7 01 	sts	0x01B7, r24	; 0x8001b7 <_ZN7TwoWire14txBufferLengthE>
+ 3fa:	05 c0       	rjmp	.+10     	; 0x406 <__LOCK_REGION_LENGTH__+0x6>
+  }else{
+  // in slave send mode
+    // reply to master
+    twi_transmit(&data, 1);
+ 3fc:	61 e0       	ldi	r22, 0x01	; 1
+ 3fe:	ce 01       	movw	r24, r28
+ 400:	01 96       	adiw	r24, 0x01	; 1
+ 402:	0e 94 5c 01 	call	0x2b8	; 0x2b8 <twi_transmit>
+  }
+  return 1;
+ 406:	81 e0       	ldi	r24, 0x01	; 1
+ 408:	90 e0       	ldi	r25, 0x00	; 0
+}
+ 40a:	0f 90       	pop	r0
+ 40c:	df 91       	pop	r29
+ 40e:	cf 91       	pop	r28
+ 410:	08 95       	ret
+			Wire.endTransmission(); 
+				// transmit buffer (blocking)
+			    uint8_t ret = twi_writeTo(txAddress, txBuffer, txBufferLength, 1, sendStop);
+					uint8_t twi_writeTo(uint8_t address, uint8_t* data, uint8_t length, uint8_t wait, uint8_t sendStop)
+					{
+					  uint8_t i;
+
+					  // ensure data will fit into buffer
+					  if(TWI_BUFFER_LENGTH < length){
+						return 1;
+					  }
+
+					  // wait until twi is ready, become master transmitter
+					  while(TWI_READY != twi_state){
+						continue;
+					  }
+					  twi_state = TWI_MTX;
+					  twi_sendStop = sendStop;
+					  // reset error state (0xFF.. no error occured)
+					  twi_error = 0xFF;
+
+					  // initialize buffer iteration vars
+					  twi_masterBufferIndex = 0;
+					  twi_masterBufferLength = length;
+					  
+					  // copy data to twi buffer
+					  for(i = 0; i < length; ++i){
+						twi_masterBuffer[i] = data[i];
+					  }
+					  
+					  // build sla+w, slave device address + w bit
+					  twi_slarw = TW_WRITE;
+					  twi_slarw |= address << 1;
+					  
+					  // if we're in a repeated start, then we've already sent the START
+					  // in the ISR. Don't do it again.
+					  //
+					  if (true == twi_inRepStart) {
+						// if we're in the repeated start state, then we've already sent the start,
+						// (@@@ we hope), and the TWI statemachine is just waiting for the address byte.
+						// We need to remove ourselves from the repeated start state before we enable interrupts,
+						// since the ISR is ASYNC, and we could get confused if we hit the ISR before cleaning
+						// up. Also, don't enable the START interrupt. There may be one pending from the 
+						// repeated start that we sent outselves, and that would really confuse things.
+						twi_inRepStart = false;			// remember, we're dealing with an ASYNC ISR
+						do {
+						  TWDR = twi_slarw;				
+						} while(TWCR & _BV(TWWC));
+						TWCR = _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE);	// enable INTs, but not START
+					  }
+					  else
+						// send start condition
+						TWCR = _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE) | _BV(TWSTA);	// enable INTs
+
+					  // wait for write operation to complete
+					  while(wait && (TWI_MTX == twi_state)){
+						continue;
+					  }
+					  
+					  if (twi_error == 0xFF)
+						return 0;	// success
+					  else if (twi_error == TW_MT_SLA_NACK)
+						return 2;	// error: address send, nack received
+					  else if (twi_error == TW_MT_DATA_NACK)
+						return 3;	// error: data send, nack received
+					  else
+						return 4;	// other twi error
+					}
+			    // reset tx buffer iterator vars
+			    txBufferIndex = 0;
+			    txBufferLength = 0;
+			    // indicate that we are done transmitting
+			    transmitting = 0;
+			    return ret;
+		delay(1000);
+
+		//put the LCD into 4 bit mode
+		// this is according to the hitachi HD44780 datasheet
+		// figure 24, pg 46
+		
+		  // we start in 8bit mode, try to set 4 bit mode
+	   write4bits(0x03 << 4);
+ 9a2:	60 e3       	ldi	r22, 0x30	; 48
+ 9a4:	87 ec       	ldi	r24, 0xC7	; 199
+ 9a6:	91 e0       	ldi	r25, 0x01	; 1
+ 9a8:	0e 94 6e 02 	call	0x4dc	;
+ void LiquidCrystal_I2C::write4bits(uint8_t value) {
+ 4dc:	0f 93       	push	r16
+ 4de:	1f 93       	push	r17
+ 4e0:	cf 93       	push	r28
+ 4e2:	8c 01       	movw	r16, r24
+ 4e4:	c6 2f       	mov	r28, r22
+	expanderWrite(value);
+ 4e6:	0e 94 09 02 	call	0x412	; 0x412 <_ZN17LiquidCrystal_I2C13expanderWriteEh>
+	printIIC((int)(_data) | _backlightval);
+	Wire.endTransmission();   
+}
+#endif
+
+	// busy wait
+	__asm__ __volatile__ (
+ 9ac:	cb e4       	ldi	r28, 0x4B	; 75
+ 9ae:	d6 e4       	ldi	r29, 0x46	; 70
+ 9b0:	ce 01       	movw	r24, r28
+ 9b2:	01 97       	sbiw	r24, 0x01	; 1
+ 9b4:	f1 f7       	brne	.-4      	; 0x9b2 <__stack+0xb3>
+   delayMicroseconds(4500); // wait min 4.1ms
+	   
+	   // second try
+	   write4bits(0x03 << 4);
+	   delayMicroseconds(4500); // wait min 4.1ms
+	   
+	   // third go!
+	   write4bits(0x03 << 4); 
+	   delayMicroseconds(150);
+	   
+	   // finally, set to 4-bit interface
+	   write4bits(0x02 << 4); 
+ 9d6:	60 e2       	ldi	r22, 0x20	; 32
+ 9d8:	87 ec       	ldi	r24, 0xC7	; 199
+ 9da:	91 e0       	ldi	r25, 0x01	; 1
+ 9dc:	0e 94 6e 02 	call	0x4dc	; 0x4dc <_ZN17LiquidCrystal_I2C10write4bitsEh>
+
+
+
+		// set # lines, font size, etc.
+		command(LCD_FUNCTIONSET | _displayfunction); 
+ 9e0:	60 91 cc 01 	lds	r22, 0x01CC	; 0x8001cc <lcd+0x5>
+ 9e4:	60 62       	ori	r22, 0x20	; 32		
+inline void LiquidCrystal_I2C::command(uint8_t value) {
+	send(value, 0);
+ 9e6:	40 e0       	ldi	r20, 0x00	; 0
+ 9e8:	87 ec       	ldi	r24, 0xC7	; 199
+ 9ea:	91 e0       	ldi	r25, 0x01	; 1
+ 9ec:	0e 94 87 02 	call	0x50e	; 0x50e <_ZN17LiquidCrystal_I2C4sendEhh>
+
+		// turn the display on with no cursor or blinking default
+		_displaycontrol = LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF;
+ 9f0:	84 e0       	ldi	r24, 0x04	; 4
+ 9f2:	80 93 cd 01 	sts	0x01CD, r24	; 0x8001cd <lcd+0x6>
+		display();
+inline void LiquidCrystal_I2C::command(uint8_t value) {
+	send(value, 0);
+ 9f6:	40 e0       	ldi	r20, 0x00	; 0
+ 9f8:	6c e0       	ldi	r22, 0x0C	; 12
+ 9fa:	87 ec       	ldi	r24, 0xC7	; 199
+ 9fc:	91 e0       	ldi	r25, 0x01	; 1
+ 9fe:	0e 94 87 02 	call	0x50e	; 0x50e <_ZN17LiquidCrystal_I2C4sendEhh>
+ a02:	40 e0       	ldi	r20, 0x00	; 0
+ a04:	61 e0       	ldi	r22, 0x01	; 1
+ a06:	87 ec       	ldi	r24, 0xC7	; 199
+ a08:	91 e0       	ldi	r25, 0x01	; 1
+ a0a:	0e 94 87 02 	call	0x50e	; 0x50e <_ZN17LiquidCrystal_I2C4sendEhh>
+ a0e:	cb e3       	ldi	r28, 0x3B	; 59
+ a10:	df e1       	ldi	r29, 0x1F	; 31
+ a12:	ce 01       	movw	r24, r28
+ a14:	01 97       	sbiw	r24, 0x01	; 1
+ a16:	f1 f7       	brne	.-4      	; 0xa14 <__stack+0x115>
+		
+		// clear it off
+		clear();
+		
+		// Initialize to default text direction (for roman languages)
+		_displaymode = LCD_ENTRYLEFT | LCD_ENTRYSHIFTDECREMENT;
+ a18:	82 e0       	ldi	r24, 0x02	; 2
+ a1a:	80 93 ce 01 	sts	0x01CE, r24	; 0x8001ce <lcd+0x7>
+		// set the entry mode
+		command(LCD_ENTRYMODESET | _displaymode);
+		inline void LiquidCrystal_I2C::command(uint8_t value) {
+	send(value, 0);
+ a1e:	40 e0       	ldi	r20, 0x00	; 0
+ a20:	66 e0       	ldi	r22, 0x06	; 6
+ a22:	87 ec       	ldi	r24, 0xC7	; 199
+ a24:	91 e0       	ldi	r25, 0x01	; 1
+ a26:	0e 94 87 02 	call	0x50e	; 0x50e <_ZN17LiquidCrystal_I2C4sendEhh>
+ a2a:	40 e0       	ldi	r20, 0x00	; 0
+ a2c:	62 e0       	ldi	r22, 0x02	; 2
+ a2e:	87 ec       	ldi	r24, 0xC7	; 199
+ a30:	91 e0       	ldi	r25, 0x01	; 1
+ a32:	0e 94 87 02 	call	0x50e	; 0x50e <_ZN17LiquidCrystal_I2C4sendEhh>
+ a36:	21 97       	sbiw	r28, 0x01	; 1
+ a38:	f1 f7       	brne	.-4      	; 0xa36 <__stack+0x137>
+		
+		home();
