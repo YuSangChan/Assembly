@@ -1,0 +1,224 @@
+.def temp         = r16
+.def mode         = r17
+.def data4bit     = r18
+.def LcdAddr    = r24
+
+
+.org 0x0000
+ jmp Reset   
+
+ Reset:
+
+ ldi temp,high(RAMEND) ; Main program start
+ out SPH,temp ; Set Stack Pointer to top of RAM
+ ldi temp,low(RAMEND)
+ out SPL,temp
+ cli ; No interrupts
+
+ sbi DDRC,4          ; PC4/SDA is output
+ sbi DDRC,5          ; PC5/SCL is output
+
+ ldi LcdAddr,0x27 ; Setup LCD display at this address
+
+ ldi temp,193         ; set the TWI bit rate register
+ sts TWBR,temp        ; 16000/(16+2*255*64) = 490Hz (page 213)
+ ldi temp,0x00 ; set the prescaler bits
+ sts TWSR,temp                  ; so the prescale factor is 1
+
+ call	LCD_Setup
+ call	LCD_Backlight
+ ;ldi		ZL,LOW(LCD_init_Msg*2)
+ ;ldi		ZH,HIGH(LCD_init_Msg*2)
+ ;ldi		r25,12
+ ;call	LCD_Text
+ call LCD_SetCursor
+ rjmp	mainLoop
+
+
+
+ ;ldi temp, (1<<TWINT)|(1<<TWEN) ; clear interrupt flag and enable TWI
+; sts TWCR,temp                  ; send START condition to TWCR (page 217)
+
+
+;
+; Send TWI start address.
+; On return Z flag is set if completed correctly
+; r15 and temp destroyed
+sendTWI_Start:
+	ldi		temp,(1<<TWINT) | (1<<TWSTA) | (1<<TWEN)
+	sts		TWCR,temp
+	call	waitTWI
+	lds		temp,TWSR
+	andi	temp,0xf8		; mask out 
+	cpi		temp,0x08		; TWSR = START (0x08)
+	brne ERROR 
+;
+; Send TWI slave address. Address is in temp
+; On return Z flag is set if completed correctly
+; r15 and temp destroyed
+sendTWI_SLA:
+	mov  	temp,LcdAddr
+	add 	temp,temp
+	sts		TWDR,temp
+	ldi		temp,(1<<TWINT) | (1<<TWEN)
+	sts		TWCR,temp
+	call	waitTWI
+	lds		temp,TWSR
+	andi	temp,0xf8		; mask out 
+	cpi		temp,0x18		; TWSR = SLA+W sent, ACK received (0x18)
+	brne ERROR
+
+;
+; Send 8 bits of data as two 4 bit nibbles.
+; The data is in r16, the lower 4 bits are in r17
+; we assume the TWI operation is waiting for data to be sent.
+; r15, r18 and r19 all destroyed
+sendTWI_Byte:
+	mov		data4bit,temp
+	andi	data4bit,0xF0
+	or		data4bit,mode
+	call	sendTWI_Nibble
+	mov		data4bit,temp
+	swap	data4bit
+	andi	data4bit,0xF0
+	or		data4bit,mode
+	call	sendTWI_Nibble
+	ret
+
+;
+; send 4 bits of data, changing the enable bit as we send it.
+; data is in r18. r15, r18 and r19 are destroyed
+;
+sendTWI_Nibble:
+	ori		data4bit,0x04
+	sts		TWDR,data4bit
+	ldi		r19,(1<<TWINT) | (1<<TWEN)
+	sts		TWCR,r19
+
+	call	waitTWI			; destroys r15
+	
+	lds		r19,TWSR
+	andi	r19,0xf8		; mask out 
+	cpi		r19,0x28		; TWSR = data sent, ACK received (0x28)
+	brne	sendTWI_Nibble_exit
+
+	andi	data4bit,0xFB		; set enable bit low
+	
+	sts		TWDR,r18
+	ldi		r19,(1<<TWINT) | (1<<TWEN)
+	sts		TWCR,r19
+
+	call	waitTWI
+	
+	lds		r19,TWSR
+	andi	r19,0xf8		; mask out 
+	cpi		r19,0x28		; TWSR = data sent, ACK received (0x28)
+sendTWI_Nibble_exit:
+	ret
+
+;
+; send stop bit and we're done
+;
+sendTWI_Stop:
+	ldi		temp,(1<<TWINT) | (1<<TWEN) | (1<<TWSTO)		; and send stop
+	sts		TWCR,temp
+	ldi		temp,0
+sendTWI_Delay:
+	dec		temp
+	brne	sendTWI_Delay
+	ret
+;
+; Wait until the TWI (I2C) interface has sent the byte and received an ack/nak
+;
+waitTWI:
+	lds	temp,TWCR
+	sbrs	temp,TWINT		; wait until transmitted
+	rjmp	waitTWI
+	ret
+
+LCD_Setup:
+	call sendTWI_Start
+	call sendTWI_SLA
+	;send 0x00
+	ldi data4bit,0x00
+	call sendTWI_Nibble
+	call sendTWI_Stop
+	;send 0x30
+	call sendTWI_Start
+	call sendTWI_SLA
+	ldi data4bit,0x30
+	call sendTWI_Nibble
+	call sendTWI_Stop
+	;send 0x30
+	call sendTWI_Start
+	call sendTWI_SLA
+	ldi data4bit,0x30
+	call sendTWI_Nibble
+	call sendTWI_Stop
+	;send 0x30
+	call sendTWI_Start
+	call sendTWI_SLA
+	ldi data4bit,0x30
+	call sendTWI_Nibble
+	call sendTWI_Stop
+	;send 0x20
+	call sendTWI_Start
+	call sendTWI_SLA
+	ldi data4bit,0x20
+	call sendTWI_Nibble
+	call sendTWI_Stop
+	;send 0x28
+	call sendTWI_Start
+	call sendTWI_SLA
+	ldi temp,0x20
+	call sendTWI_Byte
+	call sendTWI_Stop
+	;send 0x0C
+	call sendTWI_Start
+	call sendTWI_SLA
+	ldi temp,0x0C
+	call sendTWI_Byte
+	call sendTWI_Stop
+	;send 0x01
+	call sendTWI_Start
+	call sendTWI_SLA
+	ldi temp,0x01
+	call sendTWI_Byte
+	call sendTWI_Stop
+	;send 0x06
+	call sendTWI_Start
+	call sendTWI_SLA
+	ldi temp,0x06
+	call sendTWI_Byte
+	call sendTWI_Stop
+	;send 0x02
+	call sendTWI_Start
+	call sendTWI_SLA
+	ldi temp,0x02
+	call sendTWI_Byte
+	call sendTWI_Stop
+	ret
+
+LCD_Backlight:
+	;send 0x08
+	call sendTWI_Start
+	call sendTWI_SLA
+	ldi temp,0x08
+	call sendTWI_Nibble
+	call sendTWI_Stop
+	ret
+
+LCD_SetCursor:
+	;send 0x08
+	call sendTWI_Start
+	call sendTWI_SLA
+	ldi temp,0x80
+	call sendTWI_Byte
+	call sendTWI_Stop
+	ret
+
+
+ERROR:
+	call sendTWI_Stop
+
+
