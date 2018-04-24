@@ -8,6 +8,8 @@ ldi r16,low(RAMEND)
 out SPL,r16
 cli ; No interrupts
 
+sbi	DDRB,5
+
 ; I2C clock rate:	assume wants 100kHz
 sbi PORTC,5
 sbi PORTC,4
