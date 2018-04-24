@@ -1,0 +1,275 @@
+.org	0x0000					; start at beginning of program address
+jmp RESET ; Reset
+
+RESET: 
+ldi r16,high(RAMEND) ; Main program start
+out SPH,r16 ; Set Stack Pointer to top of RAM
+ldi r16,low(RAMEND)
+out SPL,r16
+cli ; No interrupts
+
+sbi	DDRB,5
+;sbi PORTB,5
+
+; I2C clock rate:	assume wants 100kHz
+sbi PORTC,5
+sbi PORTC,4
+
+ldi		r24,0x27	; Setup LCD display at this address (Maybe 0x3f instead)
+
+ // initialize twi prescaler and bit rate
+ldi		r16,0x00
+sts		TWSR,r16
+ldi		r16,0x48	; setup TWI frequency scaling
+sts		TWBR,r16
+ldi		r16,(1<<TWEA) | (1<<TWIE) | (1<<TWEN) ;enable twi module, acks, and twi interrupt
+sts		TWCR,r16
+
+call LCDsetup
+rjmp MainLoop
+
+LCD_Setup_Err:
+	rjmp MainLoop
+
+sendTWI_Start:
+ldi		r16,(1<<TWINT) | (1<<TWEA) | (1<<TWEN) | (1<<TWIE) | (1<<TWSTA)
+sts		TWCR,r16
+call	waitTWI
+
+lds		r16,TWSR
+andi	r16,0xf8		; mask out 
+cpi		r16,0x08		; TWSR = START (0x08)
+brne	LCD_Setup_Err
+ret
+
+sendTWI_SLA:
+mov 	r16,r24
+add 	r16,r16
+sts		TWDR,r16
+ldi		r16,(1<<TWINT) | (1<<TWEA) | (1<<TWEN) | (1<<TWIE) 
+sts		TWCR,r16
+call	waitTWI
+lds		r16,TWSR
+andi	r16,0xf8		; mask out 
+cpi		r16,0x18		; TWSR = SLA+W sent, ACK received (0x18)
+brne	LCD_Setup_Err
+ret
+
+sendTWI_done:
+serror:
+;
+; send stop bit and we're done
+;
+sendTWI_Stop:
+ldi		r16,(1<<TWINT) | (1<<TWEN) | (1<<TWSTO)		; and send stop
+sts		TWCR,r16
+ldi		r16,0
+sendTWI_Delay:
+dec		r16
+brne	sendTWI_Delay
+ret
+
+
+waitTWI:
+lds	r15,TWCR
+sbrs	r15,TWINT		; wait until transmitted
+rjmp	waitTWI
+ret
+
+expanderWrite:
+or 		r16,r17
+ori 	r16,0x04
+sts		TWDR,r16
+ldi		r16,(1<<TWINT) | (1<<TWEA) | (1<<TWEN) | (1<<TWIE) 
+sts		TWCR,r16
+call	waitTWI
+lds		r19,TWSR
+andi	r19,0xf8		; mask out 
+cpi		r19,0x28		; TWSR = data sent, ACK received (0x28)
+brne	sendTWI_Nibble_exit
+andi	r16,0xFB		; set enable bit low
+sts		TWDR,r16
+ldi		r16,(1<<TWINT) | (1<<TWEA) | (1<<TWEN) | (1<<TWIE) 
+sts		TWCR,r16
+call	waitTWI
+lds		r19,TWSR
+andi	r19,0xf8		; mask out 
+cpi		r19,0x28		; TWSR = data sent, ACK received (0x28)
+sendTWI_Nibble_exit:
+ret
+
+LCDsetup:
+call delay5ms
+call delay5ms
+call delay5ms
+call delay5ms
+call	sendTWI_Start
+call 	sendTWI_SLA
+;Now we pull both RS and R/W low to begin commands
+;send 0x00
+ldi r16,0x00
+ldi r17,0x00
+call expanderWrite
+call sendTWI_Stop
+call delay5ms
+
+;first 0x30
+call	sendTWI_Start
+call 	sendTWI_SLA
+ldi r16,0x30
+ldi r17,0x00
+call expanderWrite
+call sendTWI_Stop
+call delay5ms
+
+;second 0x30
+call	sendTWI_Start
+call 	sendTWI_SLA
+ldi r16,0x30
+ldi r17,0x00
+call expanderWrite
+call sendTWI_Stop
+call delay5ms
+
+;third 0x30
+call	sendTWI_Start
+call 	sendTWI_SLA
+ldi r16,0x30
+ldi r17,0x00
+call expanderWrite
+call sendTWI_Stop
+call delay5ms
+
+;0x20
+call	sendTWI_Start
+call 	sendTWI_SLA
+ldi r16,0x20
+ldi r17,0x00
+call expanderWrite
+call sendTWI_Stop
+call delay5ms
+
+;0x28
+call	sendTWI_Start
+call 	sendTWI_SLA
+ldi r16,0x20
+ldi r17,0x00
+call expanderWrite
+call sendTWI_Stop
+call delay5ms
+
+call	sendTWI_Start
+call 	sendTWI_SLA
+ldi r16,0x80
+ldi r17,0x00
+call expanderWrite
+call sendTWI_Stop
+call delay5ms
+
+;0x0F
+call	sendTWI_Start
+call 	sendTWI_SLA
+ldi r16,0x00
+ldi r17,0x00
+call expanderWrite
+call sendTWI_Stop
+call delay5ms
+
+call	sendTWI_Start
+call 	sendTWI_SLA
+ldi r16,0xF0
+ldi r17,0x00
+call expanderWrite
+call sendTWI_Stop
+call delay5ms
+
+;0x01
+call	sendTWI_Start
+call 	sendTWI_SLA
+ldi r16,0x00
+ldi r17,0x00
+call expanderWrite
+call sendTWI_Stop
+call delay5ms
+
+call	sendTWI_Start
+call 	sendTWI_SLA
+ldi r16,0x10
+ldi r17,0x00
+call expanderWrite
+call sendTWI_Stop
+call delay5ms
+
+;0x06
+call	sendTWI_Start
+call 	sendTWI_SLA
+ldi r16,0x00
+ldi r17,0x00
+call expanderWrite
+call sendTWI_Stop
+call delay5ms
+
+call	sendTWI_Start
+call 	sendTWI_SLA
+ldi r16,0x60
+ldi r17,0x00
+call expanderWrite
+call sendTWI_Stop
+call delay5ms
+
+;0x02
+call	sendTWI_Start
+call 	sendTWI_SLA
+ldi r16,0x00
+ldi r17,0x00
+call expanderWrite
+call sendTWI_Stop
+call delay5ms
+
+call	sendTWI_Start
+call 	sendTWI_SLA
+ldi r16,0x20
+ldi r17,0x00
+call expanderWrite
+call sendTWI_Stop
+call delay5ms
+
+;0x02
+call	sendTWI_Start
+call 	sendTWI_SLA
+ldi r16,0x00
+ldi r17,0x08
+call expanderWrite
+call sendTWI_Stop
+call delay5ms
+
+call	sendTWI_Start
+call 	sendTWI_SLA
+ldi r16,0x00
+ldi r17,0x08
+call expanderWrite
+call sendTWI_Stop
+call delay5ms
+
+
+sbi PORTB,5
+ret
+
+
+
+
+
+delay5ms:
+ldi  r17, 104
+ldi  r16, 229
+L1: 
+dec  r16
+brne L1
+dec  r17
+brne L1
+ret
+
+
+MainLoop:
+	rjmp MainLoop
+
