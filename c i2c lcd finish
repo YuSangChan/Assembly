@@ -1,0 +1,88 @@
+#include <Wire.h>
+
+
+void setup() {
+  
+  Wire.begin();
+  Serial.begin(9600);
+  while (!Serial);             
+  Serial.println("\nI2C Scanner");
+
+  
+  
+  delay(50);
+  //0
+  Wire.beginTransmission(0x27);
+  Wire.write(0x00); // 
+  int error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(0x00,HEX);
+    }else Serial.print("error");
+  delay(1000);
+  
+  writetoi2c(0x30);
+   writetoi2c(0x30);
+    writetoi2c(0x30);
+     writetoi2c(0x20);
+
+  writetoi2c(0x20);
+   writetoi2c(0x80);
+
+  writetoi2c(0x00);
+   writetoi2c(0xC0);
+   
+  writetoi2c(0x00);
+   writetoi2c(0x10);
+
+  writetoi2c(0x00);
+   writetoi2c(0x60);
+
+  writetoi2c(0x00);
+   writetoi2c(0x20);
+
+  writetoi2c(0x88);
+   writetoi2c(0x08);
+
+
+
+
+
+ 
+}
+
+void loop() {
+  
+
+}
+
+void writetoi2c(int num)
+{
+   Wire.beginTransmission(0x27);
+  Wire.write(num); // 
+   int error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(num,HEX);
+    }else Serial.print("error");
+  delay(1000);
+
+  Wire.beginTransmission(0x27);
+  int num2= num | 0x04;
+  Wire.write(num2); // 
+   error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(num,HEX);
+    }else Serial.print("error");
+  delay(1000);
+
+  Wire.beginTransmission(0x27);
+  Wire.write(num); // 
+   error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(num,HEX);
+    }else Serial.print("error");
+  delay(1000);
+}
