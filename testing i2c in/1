@@ -1,0 +1,166 @@
+#include <Wire.h>
+
+
+void setup() {
+  
+  Wire.begin();
+  Serial.begin(9600);
+  while (!Serial);             // Leonardo: wait for serial monitor
+  Serial.println("\nI2C Scanner");
+  Serial.println("Scanning...");
+  Wire.beginTransmission(0x27);
+  byte error = Wire.endTransmission();
+  if (error == 0)
+    {
+      Serial.print("I2C device found at address 0x");
+      Serial.print(0x27,HEX);
+      Serial.println("  !");
+    }
+    
+  delay(50);
+
+
+ 
+  Wire.beginTransmission(0x27);
+  Wire.write(0x30); // 
+   error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(0x30,HEX);
+    }else Serial.print("error");
+  delay(1000);
+
+  Wire.beginTransmission(0x27);
+  Wire.write(0x30); // 
+   error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(0x30,HEX);
+    }else Serial.print("error");
+  delay(1000);
+
+  Wire.beginTransmission(0x27);
+  Wire.write(0x30); // 
+   error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(0x30,HEX);
+    }else Serial.print("error");
+  delay(1000);
+
+  Wire.beginTransmission(0x27);
+  Wire.write(0x20); // 
+   error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(0x20,HEX);
+    }else Serial.print("error");
+  delay(1000);
+
+   Wire.beginTransmission(0x27);
+  Wire.write(0x20); // 
+   error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(0x20,HEX);
+    }else Serial.print("error");
+  delay(1000);
+
+    Wire.beginTransmission(0x27);
+  Wire.write(0x80); // 
+   error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(0x80,HEX);
+    }else Serial.print("error");
+  delay(1000);
+
+    Wire.beginTransmission(0x27);
+  Wire.write(0x00); // 
+   error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(0x00,HEX);
+    }else Serial.print("error");
+  delay(1000);
+
+    Wire.beginTransmission(0x27);
+  Wire.write(0xC0); // 
+   error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(0xC0,HEX);
+    }else Serial.print("error");
+  delay(1000);
+
+    Wire.beginTransmission(0x27);
+  Wire.write(0x00); // 
+   error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(0x00,HEX);
+    }else Serial.print("error");
+  delay(1000);
+
+    Wire.beginTransmission(0x27);
+  Wire.write(0x10); // 
+   error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(0x10,HEX);
+    }else Serial.print("error");
+  delay(1000);
+
+   Wire.beginTransmission(0x27);
+  Wire.write(0x00); // 
+   error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(0x00,HEX);
+    }else Serial.print("error");
+  delay(1000);
+
+    Wire.beginTransmission(0x27);
+  Wire.write(0x60); // 
+   error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(0x60,HEX);
+    }else Serial.print("error");
+  delay(1000);
+
+   Wire.beginTransmission(0x27);
+  Wire.write(0x08); // 
+   error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(0x08,HEX);
+    }else Serial.print("error");
+  delay(1000);
+
+
+
+
+   Wire.beginTransmission(0x27);
+  Wire.write(0x08); // 
+   error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(0x08,HEX);
+    }else Serial.print("error");
+  delay(1000);
+
+    Wire.beginTransmission(0x27);
+  Wire.write(0x18); // 
+   error =Wire.endTransmission();
+   if (error == 0)
+    {
+  Serial.println(0x18,HEX);
+    }else Serial.print("error");
+  delay(1000);
+}
+
+void loop() {
+  
+
+}
