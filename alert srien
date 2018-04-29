@@ -1,0 +1,201 @@
+;
+; Briefing_Timers_PWM.asm
+;
+; Created: 4/04/2018 9:41:12 AM
+; Author : mq20162718
+;
+
+; Demonstration of the Timer Usage and PWM capabilities of the ATmega328
+; Generate a PWM output on OC1A (Arduino 9) Port B bit 1
+
+; Replace with your application code
+	.org	0x0000		; start at beginning of program address
+	jmp RESET ; Reset	; reset and interrupt vectors
+	jmp INT0_IR ; IRQ0
+	jmp INT1_IR ; IRQ1
+	jmp PCINT0_IR ; PCINT0
+	jmp PCINT1_IR ; PCINT1
+	jmp PCINT2_IR ; PCINT2
+	jmp WDT_IR ; Watchdog Timeout
+	jmp TIM2_COMPA ; Timer2 CompareA
+	jmp TIM2_COMPB ; Timer2 CompareB
+	jmp TIM2_OVF ; Timer2 Overflow
+	jmp TIM1_CAPT ; Timer1 Capture
+	jmp TIM1_COMPA ; Timer1 CompareA
+	jmp TIM1_COMPB ; Timer1 CompareB
+	jmp TIM1_OVF ; Timer1 Overflow
+	jmp TIM0_COMPA ; Timer0 CompareA
+	jmp TIM0_COMPB ; Timer0 CompareB
+	jmp TIM0_OVF ; Timer0 Overflow
+	jmp SPI_STC ; SPI Transfer Complete
+	jmp USART_RXC ; USART RX Complete
+	jmp USART_UDRE ; USART UDR Empty
+	jmp USART_TXC ; USART TX Complete
+	jmp ADC_CC ; ADC Conversion Complete
+	jmp EE_RDY ; EEPROM Ready
+	jmp ANA_COMP ; Analog Comparator
+	jmp TWI_IR ; 2-wire Serial
+	jmp SPM_RDY ; SPM Ready
+;
+INT0_IR: rjmp  noint		; non configured interrupts - do nothing
+INT1_IR: rjmp  noint
+PCINT0_IR: rjmp  noint
+PCINT1_IR: rjmp  noint
+PCINT2_IR: rjmp  noint
+WDT_IR: rjmp  noint
+TIM2_COMPA: rjmp  noint
+TIM2_COMPB: rjmp  noint
+TIM2_OVF: rjmp  noint
+TIM1_CAPT: rjmp  noint
+TIM1_COMPA: rjmp  noint
+TIM1_COMPB: rjmp  noint
+TIM1_OVF: rjmp  noint
+TIM0_COMPA: rjmp  noint
+TIM0_COMPB: rjmp  noint
+TIM0_OVF: rjmp  overflow_handler
+SPI_STC: rjmp  noint
+USART_RXC: rjmp  noint
+USART_UDRE: rjmp  noint
+USART_TXC: rjmp  noint
+ADC_CC: rjmp  noint
+EE_RDY: rjmp  noint
+ANA_COMP: rjmp  noint
+TWI_IR: rjmp  noint
+SPM_RDY: rjmp  noint
+;
+; Generic catch everything routine.
+; We could jump back to reset to restart everything again, which would be safer.
+;
+error:
+noint:	inc	r16
+	rjmp	noint
+;
+; Main program start. Configure the system and execute the main loop
+;
+RESET:	ldi	r16,high(RAMEND) ; Set Stack Pointer to top of RAM
+	out	SPH,r16
+	ldi	r16,low(RAMEND)
+	out	SPL,r16
+	
+;
+;	Enable an interrupt when the INT0 pin changes from a high to low value.
+;
+
+	sbi	DDRB,1		; set port B bit 1 to output and low
+	cbi	PORTB,1
+
+	;initialize I/O 
+	sbi DDRB,0
+	cbi PORTB,0
+
+	;
+	; configure timer 1:
+	; count to OCR1A and reset,
+	; toggle OCR1A output on reset,
+	; frequency using /8 prescaler
+	;
+	ldi	r16,0b01000000	; port A toggle, port B normal, WGRM=0100
+	sts	TCCR1A,r16
+	ldi	r16,0b00001010	; noise = 0, WGRM=1000, clk = /8
+	sts	TCCR1B,r16
+	ldi	r16,0b00000000
+	sts	TCCR1C,r16
+
+	
+	ldi r16,0b00000100
+	out TCCR0B,r16 ;set cs00,cs01,cs02 to 101, set TCNT0 to FCPU/1024 mode
+	ldi r16,0b00000001
+	sts TIMSK0,r16 ;set  the timer overflow interrupt enable (TOIE0) bit
+	sei; enable global interrupts, equivalent to sbi SREG,I
+	clr r16
+	out TCNT0,r16 ;initialize timer/counter to 0
+
+
+
+	;ldi r18,0x07
+	;ldi r19,0xE1
+	;
+	; The counter is now running at 16,000,000 HZ / 8
+	; = 2,000,000 ticks per second, 1,000,000 cycles per second
+	; To calculate the tone frequency
+	; num = 1,000,000 / frequency
+	; for 'A' (440Hz)
+	;	1000000/440 = 2273
+	;ldi	r17,HIGH(2273)	; set counter to 2273 (440Hz, 'A')
+	;ldi	r16,LOW(2273)
+
+	;mov	r17,r18	; set counter to 2273 (440Hz, 'A')
+	;mov	r16,r19
+	;sts	OCR1AH,r17
+	;sts	OCR1AL,r16
+
+	ldi r20,-2
+
+
+		
+		
+
+
+;
+; The main loop is just a sleep instruction
+;
+main_loop:
+	sleep			; save power
+	sbi PORTB,0
+	call delay1_0
+	ldi r18,0x08
+	ldi r19,0xE1
+	mov	r17,r18	; set counter to 2273 (440Hz, 'A')
+	mov	r16,r19
+	sts	OCR1AH,r17
+	sts	OCR1AL,r16
+	cbi PORTB,0
+	call delay1_0
+	ldi r18,0x04
+	ldi r19,0x70
+	mov	r17,r18	; set counter to 2273 (440Hz, 'A')
+	mov	r16,r19
+	sts	OCR1AH,r17
+	sts	OCR1AL,r16
+	rjmp	main_loop	; after interrupt do it again
+
+delay2_0:
+	call delay1_0
+	call delay1_0
+	ret
+
+delay1_0:
+	call delay0_5
+	call delay0_5
+	ret
+
+delay0_5:
+	call delay0_25
+	call delay0_25
+	ret
+
+
+delay0_25:
+	clr r25 ;set overflows to 0
+	sec_count:	
+		cpi r25,30 ;compare overflow to 30	
+	brne sec_count ;branch back to sec_count if not equal
+	ret	;if 30 overflows have occured return to loop
+
+delay0_125:
+	clr r25 ;set overflows to 0
+	sec_count1:	
+		cpi r25,15 ;compare overflow to 30	
+	brne sec_count1 ;branch back to sec_count if not equal
+	ret	;if 30 overflows have occured return to loop
+
+
+
+
+overflow_handler:
+	inc r25	;add 1 to the counter in the overflow interrput
+	cpi r25,61	;compare r18 with 61
+	brne end ;skip next line if not equal
+	clr r25	;if 61 overflows occured, reset the counter to zero
+	end:
+	reti	;return from interrupt
