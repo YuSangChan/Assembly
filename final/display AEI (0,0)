@@ -262,39 +262,174 @@ ret
 
 
 LCDDisplayString:
-//1st char
-ldi data,0x40
-ldi blacklight,0x09
-call send0xXX
-call delay5ms; 
+;S1:N
+	;S
+	ldi data,0x50
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms; 
 
-ldi data,0x10
-ldi blacklight,0x09
-call send0xXX
-call delay5ms
+	ldi data,0x30
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms
+	;1
+	ldi data,0x30
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms; 
 
-//2st char
-ldi data,0x40
-ldi blacklight,0x09
-call send0xXX
-call delay5ms; 
+	ldi data,0x10
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms
+	;:
+	ldi data,0x30
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms; 
 
-ldi data,0x50
-ldi blacklight,0x09
-call send0xXX
-call delay5ms
+	ldi data,0xA0
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms
+	;N
+	ldi data,0x40
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms; 
 
-//3st char
-ldi data,0x40
-ldi blacklight,0x09
-call send0xXX
-call delay5ms; 
+	ldi data,0xE0
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms
 
-ldi data,0x90
-ldi blacklight,0x09
-call send0xXX
-call delay5ms
-ret
+;S2:N
+	;S
+	ldi data,0x50
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms; 
+
+	ldi data,0x30
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms
+	;2
+	ldi data,0x30
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms; 
+
+	ldi data,0x20
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms
+	;:
+	ldi data,0x30
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms; 
+
+	ldi data,0xA0
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms
+	;N
+	ldi data,0x40
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms; 
+
+	ldi data,0xE0
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms
+
+;S3:N
+	;S
+	ldi data,0x50
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms; 
+
+	ldi data,0x30
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms
+	;3
+	ldi data,0x30
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms; 
+
+	ldi data,0x30
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms
+	;:
+	ldi data,0x30
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms; 
+
+	ldi data,0xA0
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms
+	;N
+	ldi data,0x40
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms; 
+
+	ldi data,0xE0
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms
+
+;S4:N
+	;S
+	ldi data,0x50
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms; 
+
+	ldi data,0x30
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms
+	;2
+	ldi data,0x30
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms; 
+
+	ldi data,0x40
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms
+	;:
+	ldi data,0x30
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms; 
+
+	ldi data,0xA0
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms
+	;N
+	ldi data,0x40
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms; 
+
+	ldi data,0xE0
+	ldi blacklight,0x09
+	call send0xXX
+	call delay5ms
+	ret
 
 
 ;delay functions (1000,500,100,50,10,5)
