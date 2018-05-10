@@ -159,8 +159,8 @@ sts		TWCR,temp1
 call LCDsetup
 call LCDBacklightOn
 call LCDsetPos
-;call LCDDisplayString
-call LCDDisplayStringPt
+call LCDDisplayString
+;call LCDDisplayStringPt
 
 	sei			; enable interrupts globally
 rjmp MainLoop
@@ -525,7 +525,8 @@ LCDDisplayString:
 	ret
 
 LCD_init_Msg:
-.DB	 "S1:NS2:AS3:ES4:I"
+;.DB	 "S1:NS2:AS3:ES4:I"
+.DB	     "Hello World Max!"
 
 LCDDisplayStringPt:
 	ldi r22,16
@@ -610,6 +611,8 @@ rjmp MainLoop
 ; Invert the values in port B
 ;
 INT0_IR:
+	call LCDsetPos
+	call LCDDisplayStringPt
 	sbi PORTC,0
 	reti			; and we're done with the interrupt
 
@@ -617,9 +620,13 @@ INT0_IR:
 ; Invert the values in port B
 ;
 INT1_IR:
+	call LCDsetPos
+	call LCDDisplayStringPt
 	sbi PORTC,3
 	reti			; and we're done with the interrupt
 
 PCINT2_IR:
+	call LCDsetPos
+	call LCDDisplayStringPt
 	sbi PORTC,2
 	reti			; and we're done with the interrupt
