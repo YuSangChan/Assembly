@@ -1,0 +1,1054 @@
+.def temp1 = r16
+.def temp2 = r17
+.def temp3 = r18
+;overflow
+.def secT2 = r20
+.def overflowT2 = r21
+;timer
+.def EL = r22
+.def EH = r23
+;state machines
+.def numofsetbits = r24
+.def statusea	= r25 ;0000 00ea
+.def statusi	= r26 ;0000 iiii
+.def status		= r27 ; 0000 ssss
+;LCD
+.def data		= r28
+.def blacklight	= r29
+
+
+
+.org	0x0000		; start at beginning of program address
+	jmp RESET ; Reset	; reset and interrupt vectors
+	jmp INT0_IR ; IRQ0
+	jmp INT1_IR ; IRQ1
+	jmp PCINT0_IR ; PCINT0
+	jmp PCINT1_IR ; PCINT1
+	jmp PCINT2_IR ; PCINT2
+	jmp WDT_IR ; Watchdog Timeout
+	jmp TIM2_COMPA ; Timer2 CompareA
+	jmp TIM2_COMPB ; Timer2 CompareB
+	jmp TIM2_OVF ; Timer2 Overflow
+	jmp TIM1_CAPT ; Timer1 Capture
+	jmp TIM1_COMPA ; Timer1 CompareA
+	jmp TIM1_COMPB ; Timer1 CompareB
+	jmp TIM1_OVF ; Timer1 Overflow
+	jmp TIM0_COMPA ; Timer0 CompareA
+	jmp TIM0_COMPB ; Timer0 CompareB
+	jmp TIM0_OVF ; Timer0 Overflow
+	jmp SPI_STC ; SPI Transfer Complete
+	jmp USART_RXC ; USART RX Complete
+	jmp USART_UDRE ; USART UDR Empty
+	jmp USART_TXC ; USART TX Complete
+	jmp ADC_CC ; ADC Conversion Complete
+	jmp EE_RDY ; EEPROM Ready
+	jmp ANA_COMP ; Analog Comparator
+	jmp TWI_IR ; 2-wire Serial
+	jmp SPM_RDY ; SPM Ready
+
+;
+
+PCINT0_IR: rjmp  noint
+PCINT1_IR: rjmp  noint
+WDT_IR: rjmp  noint
+TIM2_COMPA: rjmp  noint
+TIM2_COMPB: rjmp  noint
+TIM2_OVF: rjmp  overflow_handler2
+TIM1_CAPT: rjmp  noint
+TIM1_COMPA: rjmp  noint
+TIM1_COMPB: rjmp  noint
+TIM1_OVF: rjmp  noint
+TIM0_COMPA: rjmp  noint
+TIM0_COMPB: rjmp  noint
+TIM0_OVF: rjmp  overflow_handler
+SPI_STC: rjmp  noint
+USART_RXC: rjmp  noint
+USART_UDRE: rjmp  noint
+USART_TXC: rjmp  noint
+ADC_CC: rjmp  noint
+EE_RDY: rjmp  noint
+ANA_COMP: rjmp  noint
+TWI_IR: rjmp  noint
+SPM_RDY: rjmp  noint
+
+;///////////
+;error     /
+;///////////
+error:
+noint:	
+	rjmp	noint
+;
+; RESET program start. Configure the system and execute the main loop
+;
+RESET: 
+	ldi temp1,high(RAMEND) ; Main program start
+	out SPH,temp1 ; Set Stack Pointer to top of RAM
+	ldi temp1,low(RAMEND)
+	out SPL,temp1
+	cli ; No interrupts
+
+	;/////////////////////
+	;Setup LCD 	         /
+	;Display default     /
+	;/////////////////////
+	;pull up i2C port
+	sbi PORTC,5
+	sbi PORTC,4
+
+	; I2C clock rate:100kHz
+	;initialize twi prescaler and bit rate
+	ldi	temp1,0x00
+	sts	TWSR,temp1
+	ldi	temp1,0x48	; setup TWI frequency scaling
+	sts	TWBR,temp1
+	ldi	temp1,(1<<TWEA) | (1<<TWIE) | (1<<TWEN) ;enable twi module, acks, and twi interrupt
+	sts	TWCR,temp1
+
+	;setup the LCD
+	call LCDsetup
+	call LCDBacklightOn
+	call LCDsetPos
+	call LCDDisplayStringDefault
+
+	;/////////////////////////////////
+	;Setup I/O pins             	 /
+	;PD7,PD6,PD5,PD4	inputs	     /
+	;PD3,PD2,PD1,PD0	inputs	     /
+	;PC7,PC6,PC5,PC4	outputs		 /
+	;/////////////////////////////////
+	cbi	DDRD,2		; set port D bit 2 as an input
+	cbi	DDRD,3		; set port D bit 2 as an input
+	cbi	DDRD,4
+	cbi	DDRD,5
+	cbi	DDRD,6
+	cbi	DDRD,7
+
+	sbi	PORTD,2		; with pullup enabled
+	sbi	PORTD,3		; with pullup enabled
+	sbi	PORTD,4		; with pullup enabled
+	sbi	PORTD,5		; with pullup enabled
+	sbi	PORTD,6		; with pullup enabled
+	sbi	PORTD,7		; with pullup enabled
+
+	ldi	temp1,0xff
+	out	DDRC,temp1	; all of port C are outputs
+	out	DDRB,temp1	; all of port C are outputs
+
+	;/////////////////////////////////
+	;Setup Exterinal interrupts		 /
+	;initialize INIT0, INIT1         /
+	;/////////////////////////////////
+	in	temp1,MCUCR	; set interrupt vectore to address 0x0002
+	ori	temp1,(1<<IVCE)
+	out	MCUCR,temp1
+	andi temp1,0xfc
+	out	MCUCR,temp1
+
+	cbi	EIMSK,INT0	; disable the interrupt while we configure INT0
+	cbi	EIMSK,INT1	; disable the interrupt while we configure INT0
+	ldi	temp1,0b00001010	;set up high to low transition interrupt for INT0
+	sts	EICRA,temp1
+	sbi	EIMSK,INT0	; and enable the interrupt for INT0
+	sbi	EIMSK,INT1	; and enable the interrupt for INT0
+
+	;/////////////////////////////////
+	;Setup Pin change interrupts	 /
+	;PD7,PD6,PD5,PD4				 /
+	;/////////////////////////////////
+	ldi temp1, (1<<PCIE2)
+	sts PCICR,temp1
+	ldi temp1,0b11110001
+	sts PCMSK2,temp1
+
+	;//////////////////////////////////////
+	;;setup the timer2, timer1, timer0    /
+	;////////////////////////////////////// 
+	sbi	DDRB,1		; set port B bit 1 to output and low
+	cbi	PORTB,1
+
+	;initialize I/O 
+	;sbi DDRB,0
+	;cbi PORTB,0
+
+	; configure timer 2:
+	ldi temp1,0b00000111
+	sts TCCR2B,temp1 ;set cs00,cs01,cs02 to 101, set TCNT0 to FCPU/64 mode
+	ldi temp1,0b00000001
+	sts TIMSK2,temp1 ;clr  the timer overflow interrupt enable (TOIE0) bit
+	clr temp1
+	sts TCNT2,temp1 ;initialize timer/counter to 0
+
+	; configure timer 1:
+	;
+	ldi	temp1,0b01000000	; port A toggle, port B normal, WGRM=0100
+	sts	TCCR1A,temp1
+	ldi	temp1,0b00001000	; noise = 0, WGRM=1000, clk = /8
+	sts	TCCR1B,temp1
+	ldi	temp1,0b00000000
+	sts	TCCR1C,temp1
+
+	; configure timer 0:
+	ldi temp1,0b0000011
+	out TCCR0B,temp1 ;set cs00,cs01,cs02 to 101, set TCNT0 to FCPU/64 mode
+	ldi temp1,0b00000000
+	sts TIMSK0,temp1 ;clr  the timer overflow interrupt enable (TOIE0) bit
+	clr temp1
+	out TCNT0,temp1 ;initialize timer/counter to 0
+
+	; initialize registers
+	ldi status,0x00
+	ldi statusi,0x00
+	ldi statusea,0x00
+	ldi numofsetbits,0x00
+	;C4=261.6Hz
+	;1000000/261 = 3831/EF7
+	ldi EH,0x0E
+	ldi EL,0xF7
+	ldi secT2,0
+
+	sei			; enable interrupts globally
+	rjmp MainLoop
+
+;send Start
+sendTWI_Start:
+	push temp1
+	ldi	 temp1,(1<<TWINT) | (1<<TWEA) | (1<<TWEN) | (1<<TWIE) | (1<<TWSTA)
+	sts	 TWCR,temp1
+	call waitTWI
+	lds	 temp1,TWSR
+	andi temp1,0xf8		; mask out 
+	cpi	 temp1,0x08		; TWSR = START (0x08)
+	pop  temp1
+	ret
+
+;send Address
+sendTWI_SLA:
+	push temp1
+	ldi  temp1,0x27 ;I2C LCD address
+	add  temp1,temp1
+	sts	 TWDR,temp1
+	ldi	 temp1,(1<<TWINT) | (1<<TWEA) | (1<<TWEN) | (1<<TWIE) 
+	sts	 TWCR,temp1
+	call waitTWI
+	lds	 temp1,TWSR
+	andi temp1,0xf8		; mask out 
+	cpi	 temp1,0x18		; TWSR = SLA+W sent, ACK received (0x18)
+	pop  temp1
+	ret
+
+sendTWI_done:
+serror:
+;
+; send stop bit and we're done
+;
+sendTWI_Stop:
+	push temp1
+	ldi	 temp1,(1<<TWINT) | (1<<TWEN) | (1<<TWSTO)		; and send stop
+	sts	 TWCR,temp1
+	ldi	 temp1,0
+	sendTWI_Delay:
+	dec	 temp1
+	brne sendTWI_Delay
+	pop  temp1
+	ret
+
+;waiting for the TWI 
+waitTWI:
+	lds	 r15,TWCR
+	sbrs r15,TWINT		; wait until transmitted
+	rjmp waitTWI
+	ret
+
+;send a byte hex (data,data|en,data|~en)
+send0xXX:
+	call sendcmdenoff
+	call sendTWI_Stop
+	call sendcmdenon
+	call sendTWI_Stop
+	call sendcmdenoff
+	call sendTWI_Stop
+	ret
+
+;send data|en
+sendcmdenon:
+	call sendTWI_Start
+	call sendTWI_SLA
+	push temp1
+	push temp2
+	mov  temp1,data
+	mov  temp2,blacklight
+	or   temp1,temp2
+	ori  temp1,0x04	; set enable bit high
+	sts	 TWDR,temp1
+	ldi	 temp1,(1<<TWINT) | (1<<TWEA) | (1<<TWEN) | (1<<TWIE) 
+	sts	 TWCR,temp1
+	call waitTWI
+	lds	 temp1,TWSR
+	andi temp1,0xf8		; mask out 
+	cpi	 temp1,0x28		; TWSR = data sent, ACK received (0x28)
+	pop temp2
+	pop temp1
+	ret
+
+;send data|~en
+sendcmdenoff:
+	call sendTWI_Start
+	call sendTWI_SLA
+	push temp1
+	push temp2
+	mov  temp1,data
+	mov  temp2,blacklight
+	or   temp1,temp2
+	ori  temp1,0x00	; set enable bit high
+	sts	 TWDR,temp1
+	ldi	 temp1,(1<<TWINT) | (1<<TWEA) | (1<<TWEN) | (1<<TWIE) 
+	sts	 TWCR,temp1
+	call waitTWI
+	lds	 temp1,TWSR
+	andi temp1,0xf8		; mask out 
+	cpi	 temp1,0x28		; TWSR = data sent, ACK received (0x28)
+	pop  temp2
+	pop  temp1
+	ret
+
+;setup function
+LCDsetup:
+	//least 40ms after power rises above 2.7V
+	call delay50ms
+
+	//pull both RS and R/W low to begin commands
+	ldi  blacklight,0x00
+	ldi  data,0x00
+	call sendcmdenoff
+	call delay50ms
+
+	//put the LCD into 4 bit mode
+	// we start in 8bit mode, try to set 4 bit mode
+	ldi  data,0x30
+	call send0xXX
+	call delay5ms; // wait min 4.1ms
+	// second try
+	ldi  data,0x30
+	call send0xXX
+	call delay5ms; // wait min 4.1ms
+	// third go!
+	ldi  data,0x30
+	call send0xXX
+	call delay5ms;
+   
+	// finally, set to 4-bit interface
+	ldi  data,0x20
+	call send0xXX
+
+	// set # lines, font size, etc.
+	ldi  data,0x20
+	call send0xXX
+	ldi  data,0x80
+	call send0xXX
+
+	// turn the display on with no cursor or blinking default
+	ldi  data,0x00
+	call send0xXX
+	ldi  data,0xC0
+	call send0xXX
+
+	// clear it off
+	ldi  data,0x00
+	call send0xXX
+	ldi  data,0x10
+	call send0xXX
+	call delay5ms
+
+	// Initialize to default text direction (for roman languages)
+	// set the entry mode
+	ldi  data,0x00
+	call send0xXX
+	ldi  data,0x60
+	call send0xXX
+
+	// reset to home (0,0)
+	ldi  data,0x00
+	call send0xXX
+	ldi  data,0x20
+	call send0xXX
+	call delay5ms
+	ret
+
+LCDBacklightOn:
+	ldi  data,0x00
+	ldi  blacklight,0x08
+	call sendcmdenoff
+	ret
+
+LCDsetPos: //default 0,0
+	ldi  blacklight,0x08
+	ldi  data,0x80
+	call send0xXX
+	ldi  data,0x00
+	call send0xXX
+	ret
+
+LCDsetPos2: //default 2,0
+	ldi  blacklight,0x08
+	ldi  data,0xC0
+	call send0xXX
+	ldi  data,0x00
+	call send0xXX
+	ret
+
+LCDDisplayStringDefault:
+	ldi blacklight,0x09
+;S1:N
+	;S
+	ldi data,0x50
+	call send0xXX
+	ldi data,0x30
+	call send0xXX
+	;1
+	ldi data,0x30
+	call send0xXX
+	ldi data,0x10
+	call send0xXX
+	;:
+	ldi data,0x30
+	call send0xXX
+	ldi data,0xA0
+	call send0xXX
+	;N
+	ldi data,0x20
+	call send0xXX
+	ldi data,0x00
+	call send0xXX
+
+;S2:N
+	;S
+	ldi data,0x50
+	call send0xXX
+	ldi data,0x30
+	call send0xXX
+	;2
+	ldi data,0x30
+	call send0xXX
+	ldi data,0x20
+	call send0xXX
+	;:
+	ldi data,0x30
+	call send0xXX
+	ldi data,0xA0
+	call send0xXX
+	;N
+	ldi data,0x20
+	call send0xXX
+	ldi data,0x00
+	call send0xXX
+
+;S3:N
+	;S
+	ldi data,0x50
+	call send0xXX
+	ldi data,0x30
+	call send0xXX
+	;3
+	ldi data,0x30
+	call send0xXX
+	ldi data,0x30
+	call send0xXX
+	;:
+	ldi data,0x30
+	call send0xXX
+	ldi data,0xA0
+	call send0xXX
+	;N
+	ldi data,0x20
+	call send0xXX
+	ldi data,0x00
+	call send0xXX
+
+;S4:N
+	;S
+	ldi data,0x50
+	call send0xXX
+	ldi data,0x30
+	call send0xXX
+	;2
+	ldi data,0x30
+	call send0xXX
+	ldi data,0x40
+	call send0xXX
+	;:
+	ldi data,0x30
+	call send0xXX
+	ldi data,0xA0
+	call send0xXX
+	;N
+	ldi data,0x20
+	call send0xXX
+	ldi data,0x00
+	call send0xXX
+	ret
+
+LCDsetPos3: //default 0,3
+	ldi data,0x80
+	ldi blacklight,0x08
+	call send0xXX
+	ldi data,0x30
+	ldi blacklight,0x08
+	call send0xXX
+	ret
+
+LCDsetPos7: //default 0,7
+	ldi data,0x80
+	ldi blacklight,0x08
+	call send0xXX
+	ldi data,0x70
+	ldi blacklight,0x08
+	call send0xXX
+	ret
+
+LCDsetPos11: //default 0,B
+	ldi data,0x80
+	ldi blacklight,0x08
+	call send0xXX
+	ldi data,0xB0
+	ldi blacklight,0x08
+	call send0xXX
+	ret
+
+LCDsetPos15: //default 0,F
+	ldi data,0x80
+	ldi blacklight,0x08
+	call send0xXX
+	ldi data,0xF0
+	ldi blacklight,0x08
+	call send0xXX
+	ret
+
+LCDDisplayA:
+	;A
+	ldi data,0x40
+	ldi blacklight,0x09
+	call send0xXX
+	ldi data,0x10
+	ldi blacklight,0x09
+	call send0xXX
+	ret
+
+LCDDisplayI:
+	;I
+	ldi data,0x40
+	ldi blacklight,0x09
+	call send0xXX
+	ldi data,0x90
+	ldi blacklight,0x09
+	call send0xXX
+	ret
+
+LCDDisplayE:
+	;E
+	ldi data,0x40
+	ldi blacklight,0x09
+	call send0xXX
+	ldi data,0x50
+	ldi blacklight,0x09
+	call send0xXX
+	ret
+
+
+LCDDisplaySpace:
+	;space
+	ldi data,0x20
+	ldi blacklight,0x09
+	call send0xXX
+	ldi data,0x00
+	ldi blacklight,0x09
+	call send0xXX
+	ret
+
+S1P3SPACE:
+	call LCDsetPos3
+	call LCDDisplaySpace
+	ret
+
+S1P3A:
+	call LCDsetPos3
+	call LCDDisplayA
+	ret
+
+S1P3E:
+	call LCDsetPos3
+	call LCDDisplayE
+	ret
+
+S1P3I:
+	call LCDsetPos3
+	call LCDDisplayI
+	ret
+
+S2P7SPACE:
+	call LCDsetPos7
+	call LCDDisplaySpace
+	ret
+
+S2P7A:
+	call LCDsetPos7
+	call LCDDisplayA
+	ret
+
+S2P7E:
+	call LCDsetPos7
+	call LCDDisplayE
+	ret
+
+S2P7I:
+	call LCDsetPos7
+	call LCDDisplayI
+	ret
+
+S3PBSPACE:
+	call LCDsetPos11
+	call LCDDisplaySpace
+	ret
+
+S3PBA:
+	call LCDsetPos11
+	call LCDDisplayA
+	ret
+
+S3PBE:
+	call LCDsetPos11
+	call LCDDisplayE
+	ret
+
+S3PBI:
+	call LCDsetPos11
+	call LCDDisplayI
+	ret
+
+S4PFSPACE:
+	call LCDsetPos15
+	call LCDDisplaySpace
+	ret
+
+S4PFA:
+	call LCDsetPos15
+	call LCDDisplayA
+	ret
+
+S4PFE:
+	call LCDsetPos15
+	call LCDDisplayE
+	ret
+
+S4PFI:
+	call LCDsetPos15
+	call LCDDisplayI
+	ret
+
+setLCDString:
+	cpi statusea,0
+	brne EorA
+	cpi statusi,0
+	breq AllI
+	sbrc statusi,0
+	call S1P3I
+	sbrc statusi,1
+	call S2P7I
+	sbrc statusi,2
+	call S3PBI
+	sbrc statusi,3
+	call S4PFI
+	jmp endsetLCDString
+	AllI:
+	call S1P3SPACE
+	call S2P7SPACE
+	call S3PBSPACE
+	call S4PFSPACE
+	jmp endsetLCDString
+	EorA:
+	cpi statusi,0
+	breq noI
+	cpi statusea,2
+	breq IE
+	mov temp1,status
+	mov temp2,statusi
+	eor temp1,temp2
+	sbrc statusi,0
+	call S1P3I
+	sbrc statusi,1
+	call S2P7I
+	sbrc statusi,2
+	call S3PBI
+	sbrc statusi,3
+	call S4PFI
+	sbrc temp1,0
+	call S1P3A
+	sbrc temp1,1
+	call S2P7A
+	sbrc temp1,2
+	call S3PBA
+	sbrc temp1,3
+	call S4PFA
+	jmp endsetLCDString
+	IE:
+	mov temp1,status
+	mov temp2,statusi
+	eor temp1,temp2
+	sbrc statusi,0
+	call S1P3I
+	sbrc statusi,1
+	call S2P7I
+	sbrc statusi,2
+	call S3PBI
+	sbrc statusi,3
+	call S4PFI
+	sbrc temp1,0
+	call S1P3E
+	sbrc temp1,1
+	call S2P7E
+	sbrc temp1,2
+	call S3PBE
+	sbrc temp1,3
+	call S4PFE
+	jmp endsetLCDString
+	noI:
+	cpi statusea,2
+	breq noIE
+	sbrc status,0
+	call S1P3A
+	sbrc status,1
+	call S2P7A
+	sbrc status,2
+	call S3PBA
+	sbrc status,3
+	call S4PFA
+	jmp endsetLCDString
+	noIE:
+	sbrc status,0
+	call S1P3E
+	sbrc status,1
+	call S2P7E
+	sbrc status,2
+	call S3PBE
+	sbrc status,3
+	call S4PFE
+	endsetLCDString:
+	ret
+
+
+LCD_init_Msg:
+.DB	 "S1:NS2:NS3:NS4:N"
+ ;.DB	 "Destiny2 = trash"
+
+
+LCD_init_MsgE:
+ .DB	 "EEEEEEEEEEEEEEEE"
+
+LCD_init_MsgEPressed:
+ .DB	 "Ebutton  Pressed"
+
+
+LCD_init_MsgI:
+;.DB	 "S1:ES2:ES3:ES4:E"
+ .DB	 "IIIIIIIIIIIIIIII"
+
+
+
+LCDDisplayStringPt:
+	ldi blacklight,0x09
+	ldi temp1,16
+	;ldi	zl,low(LCD_init_Msg*2)
+	;ldi	zh,high(LCD_init_Msg*2)
+loopstart:
+	lpm  data,Z+
+	push data
+	andi data, 0b11110000
+	call send0xXX
+	pop  data
+	swap data
+	andi data,0b11110000
+	call send0xXX
+	dec  temp1
+	cpi  temp1,0
+	brne loopstart
+	ret
+
+
+
+;delay functions (1000,500,100,50,10,5)
+;1sec
+delay1000ms:
+	call delay500ms
+	call delay500ms
+	ret
+;.5sec
+delay500ms:
+	call delay100ms
+	call delay100ms
+	call delay100ms
+	call delay100ms
+	call delay100ms
+	ret
+;.1sec
+delay100ms:
+	call delay50ms
+	call delay50ms
+	ret
+;.05sec
+delay50ms:
+	call delay10ms
+	call delay10ms
+	call delay10ms
+	call delay10ms
+	ret
+;.01sec
+delay10ms:
+	call delay5ms
+	call delay5ms
+	ret
+;.005sec
+delay5ms:
+	ldi  temp2, 104
+	ldi  temp1, 229
+	L1: 
+	dec  temp1
+	brne L1
+	dec  temp2
+	brne L1
+	ret
+
+;error handling function + debugger
+LCD_Setup_Err:
+	rjmp error
+	
+
+findnumsetbits:
+	clr  temp1
+	clr  temp2
+	;check for isolate sectors
+	mov  r15,statusi
+	mov  temp1,status 
+	eor  temp1,r15	;eor statusi & status
+
+	push temp1
+	lsr  temp1	;(i>>1)
+	andi temp1,0x55 ;((i>>1)&0x55)
+	pop  temp2	;temp2 = i
+	sub  temp2,temp1 ;i-((i>>1)&0x55)
+
+	mov  temp1,temp2
+	andi temp2,0x33	;(i&0x33)
+	lsr  temp1
+	lsr  temp1	;(i>>2)
+	andi temp1,0x33	;((i>>2)&0x33)
+	add  temp1,temp2	;(i&0x33)+((i>>2)&0x33)
+
+	mov  temp2,temp1
+	lsr  temp1
+	lsr  temp1
+	lsr  temp1
+	lsr  temp1	;(i>>4)
+	add  temp1,temp2	;(i+;(i>>4))
+	andi temp1,0x0f	;	(i+;(i>>4))&0x0f
+	mov  numofsetbits,temp1	;save the result
+	ret
+
+checka:
+	cpi  statusea,2
+	breq endchecka
+	cpi  statusea,1
+	breq endchecka
+	cpi  numofsetbits,1
+	brne endchecka ;branch if numbersetbits is not equal to 1
+	ldi  statusea,0b0000001
+	endchecka:
+	ret
+
+checke:
+	cpi  statusea,2
+	breq endchecke
+	cpi  numofsetbits,2
+	brlo endchecke ;branch if numbersetbits is smaller than 2
+	ldi EH,0x0E
+	ldi EL,0xF7
+	ldi  statusea,0b0000010
+	endchecke:
+	ret
+
+
+do_alert:
+	sei
+	ldi	temp1,0b00001010	; noise = 0, WGRM=1000, clk = /8
+	sts	TCCR1B,temp1
+	call AlertSiren 
+	cli
+	ret
+
+do_evacuate:
+	ldi	temp1,0b00001010	; noise = 0, WGRM=1000, clk = /8
+	sts	TCCR1B,temp1
+	ldi temp1,0b00000001
+	sts TIMSK0,temp1 ;set  the timer overflow interrupt enable (TOIE0) bit
+	ret
+
+
+
+AlertSiren:
+	;disable Timer0
+	ldi  temp1,0b00000000
+	sts  TIMSK0,temp1 ;set  the timer overflow interrupt enable (TOIE0) bit
+	ldi  temp2,0x04
+	ldi  temp1,0x70
+	sts	 OCR1AH,temp2
+	sts	 OCR1AL,temp1
+	call delay500ms
+	ldi  temp2,0x08
+	ldi  temp1,0xE1
+	sts	 OCR1AH,temp2
+	sts	 OCR1AL,temp1
+	call delay500ms
+	ret
+
+
+;main loop
+MainLoop:
+	cli
+	call findnumsetbits
+	call checka
+	call checke
+	cpi  statusea,1
+	brne PC+2
+	call do_alert
+	cpi  statusea,2
+	brne PC+2
+	call do_evacuate
+	mov  temp1,statusea
+	lsl  temp1
+	lsl  temp1
+	out  PORTB,temp1
+	sei
+	rjmp MainLoop
+
+
+;
+;I
+;
+INT0_IR:
+	ldi  statusea,0b00000000
+	mov  statusi,status
+	;call LCDsetPos
+	;ldi	 zl,low(LCD_init_MsgI*2)
+	;ldi	 zh,high(LCD_init_MsgI*2)
+	;call LCDDisplayStringPt
+	call setLCDString
+	;turn off PWM
+	ldi	temp1,0b00001000	; noise = 0, WGRM=1000, clk = /8
+	sts	TCCR1B,temp1
+	reti			
+
+;
+;E
+;
+INT1_IR:
+	;cpi status,0
+	;brne PC+2
+	;ldi status,0b00001111
+	ldi statusea,0b00000010
+
+	ldi EH,0x0E
+	ldi EL,0xF7
+	ldi temp1,0b00000001
+	sts TIMSK0,temp1 ;set  the timer overflow interrupt enable (TOIE0) bit
+	
+	;call LCDsetPos
+	;ldi	zl,low(LCD_init_MsgE*2)
+	;ldi	zh,high(LCD_init_MsgE*2)
+	;call LCDDisplayStringPt
+	cpi status,0
+	breq PC+2
+	call setLCDString
+	call LCDsetPos2
+	ldi	zl,low(LCD_init_MsgEPressed*2)
+	ldi	zh,high(LCD_init_MsgEPressed*2)
+	call LCDDisplayStringPt
+	reti			
+
+;Pin change interrupt for PD4,5,6,7
+PCINT2_IR:
+	clr overflowT2
+	sbis PIND,4
+	call s1
+	sbis PIND,5
+	call s2
+	sbis PIND,6
+	call s3
+	sbis PIND,7
+	call s4
+	sbis PIND,0
+	call clearRest
+	call findnumsetbits
+	call checka
+	call checke
+	call setLCDString
+	reti
+
+;set functions for each sector
+s1:
+	sbi PORTC,0
+	sbr status,1
+	ret
+s2:
+	sbi PORTC,1
+	sbr status,(1<<1)
+	ret
+s3:
+	sbi PORTC,2
+	sbr status,(1<<2)
+	ret
+s4:
+	sbi PORTC,3
+	sbr status,(1<<3)
+	ret
+
+clearRest:
+	cpi statusea,0
+	brne dontclearRest
+	call findnumsetbits
+	cpi numofsetbits,0
+	brne PC+2
+	jmp RESET
+	dontclearRest:
+	ret
+
+overflow_handler:
+	cpi EH,0x01
+	brne normal
+	cpi EL,0xFA
+	brne normal
+	ldi EH,0x0E
+	ldi EL,0xF7
+	normal:
+	cpi EL,0
+	breq decEH
+	dec EL
+	jmp setOCR1
+	decEH:
+	dec EH
+	ldi EL,255
+	setOCR1:
+	sts	OCR1AH,EH
+	sts	OCR1AL,EL
+	reti
+								
+overflow_handler2:
+	inc overflowT2
+	cpi overflowT2,183
+	brne endoverflow_handler2
+	clr overflowT2
+	cpi statusea,1
+	brne endoverflow_handler2
+	ldi statusea,0b00000010
+	ldi EH,0x0E
+	ldi EL,0xF7
+	call setLCDString
+	endoverflow_handler2:
+	reti							
